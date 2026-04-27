@@ -68,7 +68,7 @@ chmod +x setup_server.sh && ./setup_server.sh
 ### 2. Clone with submodules
 
 ```bash
-git clone --recurse-submodules https://github.com/sabnei/portfolio-server.git
+git clone --recurse-submodules https://github.com/Sabnei/portfolio-server.git
 cd portfolio-server
 ```
 
