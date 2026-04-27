@@ -1,0 +1,96 @@
+version: '3.8'
+
+networks:
+  portfolio-network:
+    driver: bridge
+
+x-airflow-common:
+  &airflow-common
+  build: .
+  env_file: .env
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    # Airflow guarda su estado interno en el schema "airflow_metadata"
+    # del mismo postgres-central. Los proyectos usan sus propios schemas.
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: >-
+      postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres-central:5432/${POSTGRES_DB}?options=-csearch_path%3Dairflow_metadata
+  volumes:
+    - ./dags:/opt/airflow/dags        # todos los DAGs y submódulos viven aquí
+    - ./logs:/opt/airflow/logs
+    - ./plugins:/opt/airflow/plugins
+  networks:
+    - portfolio-network
+  depends_on:
+    postgres-central:
+      condition: service_healthy
+
+services:
+
+  # ── Contenedor 1: PostgreSQL central ──────────────────────────────
+  # Un solo Postgres para todos los proyectos, separados por schemas.
+  postgres-central:
+    image: postgres:15
+    container_name: postgres-central
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - portfolio-network
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+      interval: 5s
+      retries: 5
+    restart: always
+
+  # ── Contenedor 2: Airflow ─────────────────────────────────────────
+  # Corre una sola vez para inicializar la DB y crear el usuario admin
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow-init
+    command: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create
+          --username ${AIRFLOW_USER}
+          --password ${AIRFLOW_PASSWORD}
+          --firstname ${AIRFLOW_FIRSTNAME} --lastname ${AIRFLOW_LASTNAME}
+          --role Admin --email ${AIRFLOW_EMAIL}
+      "
+    restart: "no"
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow-webserver
+    command: webserver
+    ports:
+      - "8080:8080"
+    restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow-scheduler
+    command: scheduler
+    restart: always
+
+  # ── pgAdmin: cliente visual para todos los schemas ─────────────────
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+    ports:
+      - "5050:80"
+    networks:
+      - portfolio-network
+    restart: always
+
+volumes:
+  pg_data:
