@@ -54,15 +54,7 @@ services:
   airflow-init:
     <<: *airflow-common
     container_name: airflow-init
-    command: >
-      bash -c "
-        airflow db migrate &&
-        airflow users create
-          --username ${AIRFLOW_USER}
-          --password ${AIRFLOW_PASSWORD}
-          --firstname ${AIRFLOW_FIRSTNAME} --lastname ${AIRFLOW_LASTNAME}
-          --role Admin --email ${AIRFLOW_EMAIL}
-      "
+    command: bash -c "airflow db migrate && airflow users create --username $${AIRFLOW_USER} --password $${AIRFLOW_PASSWORD} --firstname Admin --lastname User --role Admin --email admin@portfolio.local"
     restart: "no"
 
   airflow-webserver:
