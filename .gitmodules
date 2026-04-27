@@ -1,0 +1,3 @@
+[submodule "dags/crypto-etl-pipeline"]
+	path = dags/crypto-etl-pipeline
+	url = https://github.com/sabnei/crypto-etl-pipeline.git
